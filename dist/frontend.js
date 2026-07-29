@@ -277,10 +277,12 @@ export function setup(ctx) {
             handleContentEditableBeforeInput(rawEvent, target);
     };
     document.addEventListener('beforeinput', beforeInput, true);
-    let action = null;
+    let autoCloseAction = null;
+    let widgetAction = null;
     let widget = null;
     let widgetButton = null;
-    let unsubscribeAction = null;
+    let unsubscribeAutoCloseAction = null;
+    let unsubscribeWidgetAction = null;
     const updateUi = () => {
         if (widgetButton) {
             widgetButton.dataset.enabled = enabled ? 'true' : 'false';
@@ -288,19 +290,20 @@ export function setup(ctx) {
             widgetButton.setAttribute('aria-label', enabled
                 ? 'Disable Auto-Close markers'
                 : 'Enable Auto-Close markers');
-            widgetButton.title = `Auto-close markers: ${enabled ? 'On' : 'Off'}`;
+            widgetButton.title = `Auto-Close: ${enabled ? 'On' : 'Off'}`;
         }
-        if (action) {
-            if (widget) {
-                action.setLabel(`${widgetVisible ? 'Hide' : 'Show'} Auto-Close widget · ${enabled ? 'On' : 'Off'}`);
-            }
-            else {
-                action.setLabel(`Auto-close markers: ${enabled ? 'On' : 'Off'}`);
-            }
-        }
+        autoCloseAction?.setLabel(`Auto-Close: ${enabled ? 'On' : 'Off'}`);
+        widgetAction?.setLabel(`Auto-Close widget: ${widgetVisible ? 'On' : 'Off'}`);
     };
     const toggleEnabled = () => {
         enabled = !enabled;
+        updateUi();
+    };
+    const toggleWidget = () => {
+        if (!widget)
+            return;
+        widgetVisible = !widgetVisible;
+        widget.setVisible(widgetVisible);
         updateUi();
     };
     try {
@@ -318,9 +321,9 @@ export function setup(ctx) {
         const style = document.createElement('style');
         style.textContent = `
       .lumi-auto-close-widget {
-        position: relative;
-        display: grid;
-        place-items: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         width: 48px;
         height: 48px;
         padding: 0;
@@ -347,57 +350,45 @@ export function setup(ctx) {
       }
       .lumi-auto-close-widget__quote {
         display: block;
-        transform: translateY(-1px);
+        width: 100%;
+        text-align: center;
         font-family: Georgia, 'Times New Roman', serif;
         font-size: 30px;
         font-weight: 700;
         line-height: 1;
-      }
-      .lumi-auto-close-widget__status {
-        position: absolute;
-        right: 5px;
-        bottom: 5px;
-        width: 9px;
-        height: 9px;
-        border: 2px solid rgba(20, 20, 24, .78);
-        border-radius: 999px;
-        background: #fff;
-      }
-      .lumi-auto-close-widget[data-enabled="false"] .lumi-auto-close-widget__status {
-        background: rgba(150, 150, 158, .9);
+        transform: translateY(4px);
       }
     `;
         widgetButton = document.createElement('button');
         widgetButton.type = 'button';
         widgetButton.className = 'lumi-auto-close-widget';
-        widgetButton.innerHTML = '<span class="lumi-auto-close-widget__quote" aria-hidden="true">”</span><span class="lumi-auto-close-widget__status" aria-hidden="true"></span>';
+        widgetButton.innerHTML = '<span class="lumi-auto-close-widget__quote" aria-hidden="true">”</span>';
         widgetButton.addEventListener('click', toggleEnabled);
         widget.root.replaceChildren(style, widgetButton);
         widget.setVisible(false);
     }
     catch {
         widget?.destroy();
-        // If ui_panels is unavailable or revoked, the Extras action falls back to
-        // directly toggling Auto-Close so the extension remains usable.
         widget = null;
         widgetButton = null;
     }
     try {
-        action = ctx.ui.registerInputBarAction({
+        autoCloseAction = ctx.ui.registerInputBarAction({
             id: 'toggle-auto-close',
-            label: widget ? 'Show Auto-Close widget · On' : 'Auto-close markers: On',
+            label: 'Auto-Close: On',
             iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.8 18H11V8H4v6h2.8v4Zm10 0H21V8h-7v6h2.8v4Z"/></svg>',
             enabled: true,
         });
-        unsubscribeAction = action.onClick(() => {
-            if (!widget) {
-                toggleEnabled();
-                return;
-            }
-            widgetVisible = !widgetVisible;
-            widget.setVisible(widgetVisible);
-            updateUi();
-        });
+        unsubscribeAutoCloseAction = autoCloseAction.onClick(toggleEnabled);
+        if (widget) {
+            widgetAction = ctx.ui.registerInputBarAction({
+                id: 'toggle-auto-close-widget',
+                label: 'Auto-Close widget: Off',
+                iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 5h14v14H5V5Zm2 2v10h10V7H7Zm2.4 8h2.8V9H8v4h1.4v2Zm5 0h2.8V9H13v4h1.4v2Z"/></svg>',
+                enabled: true,
+            });
+            unsubscribeWidgetAction = widgetAction.onClick(toggleWidget);
+        }
     }
     catch {
         // Auto-Close still works if this Lumiverse build predates Input Bar Actions.
@@ -407,8 +398,10 @@ export function setup(ctx) {
         document.removeEventListener('beforeinput', beforeInput, true);
         if (widgetButton)
             widgetButton.removeEventListener('click', toggleEnabled);
-        unsubscribeAction?.();
-        action?.destroy();
+        unsubscribeAutoCloseAction?.();
+        unsubscribeWidgetAction?.();
+        autoCloseAction?.destroy();
+        widgetAction?.destroy();
         widget?.destroy();
     };
 }

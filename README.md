@@ -28,18 +28,16 @@ Password fields, disabled/read-only fields, hidden backing inputs, and elements 
 
 Typing an opening marker inserts both characters and leaves the caret between them. Typing the closer when it is already under the caret moves across it instead of duplicating it. Pressing Backspace between an empty pair removes both characters. Selecting text and typing an opening marker wraps the selection.
 
-## Global toggle widget
+## Global controls and widget
 
-Version 1.2 adds a small draggable curly-quote widget that can toggle Auto-Close from anywhere in Lumiverse.
+Version 1.2 adds a small draggable curly-quote widget that can toggle Auto-Close from anywhere in Lumiverse. The widget is **hidden by default**.
 
-The widget is **hidden by default**. Open the chat input bar's **Extras** popover and choose **Show Auto-Close widget** to reveal it. Use the same command to hide it again.
+The chat input bar's **Extras** popover contains two independent commands:
 
-- Click the floating curly quote to turn Auto-Close on or off globally.
-- The bright/accent state means Auto-Close is on.
-- The muted state means Auto-Close is off.
-- The widget follows Lumiverse route changes and can be dragged to a convenient screen edge.
+- **Auto-Close: On/Off** toggles the feature directly, whether or not the widget is visible.
+- **Auto-Close widget: On/Off** only shows or hides the floating widget.
 
-The Extras command includes the current On/Off state. If Float Widgets are unavailable, the command gracefully falls back to toggling Auto-Close directly.
+Clicking the floating curly quote toggles Auto-Close globally through the same state path as the first command, so its label updates immediately. The bright/accent button means Auto-Close is on; the muted button means it is off. The widget follows Lumiverse route changes and can be dragged to a convenient screen edge.
 
 ## Permission
 
@@ -47,8 +45,14 @@ The extension requests `ui_panels` only so it can use Lumiverse's official Float
 
 ## Install
 
-Install via the Lumiverse Extensions tab, pasting this repository's link in the installation field:
-```https://github.com/kittyafterdark/Lumi-AutoClose```
+Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
+
+The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
+
+```bash
+bun install
+bun run build
+```
 
 ## Customize pairs
 

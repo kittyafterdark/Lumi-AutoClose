@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+
+- Split the Extras controls into two independent commands: **Auto-Close: On/Off** and **Auto-Close widget: On/Off**.
+- Kept the Auto-Close command synchronized when the floating widget toggles the feature.
+- Centered the curly-quote icon and removed the redundant status dot.
+- Kept the floating widget hidden by default.
+
 ## 1.2.0
 
 - Added an optional draggable global Auto-Close toggle using Lumiverse's official Float Widget API.
