@@ -303,6 +303,7 @@ function handleContentEditableBeforeInput(event: InputEvent, root: HTMLElement):
 
 export function setup(ctx: SpindleFrontendContext) {
   let enabled = true
+  let widgetVisible = false
 
   const beforeInput = (rawEvent: Event) => {
     if (!enabled || !(rawEvent instanceof InputEvent) || rawEvent.isComposing) return
@@ -317,27 +318,145 @@ export function setup(ctx: SpindleFrontendContext) {
   document.addEventListener('beforeinput', beforeInput, true)
 
   let action: ReturnType<SpindleFrontendContext['ui']['registerInputBarAction']> | null = null
+  let widget: ReturnType<SpindleFrontendContext['ui']['createFloatWidget']> | null = null
+  let widgetButton: HTMLButtonElement | null = null
   let unsubscribeAction: (() => void) | null = null
+
+  const updateUi = () => {
+    if (widgetButton) {
+      widgetButton.dataset.enabled = enabled ? 'true' : 'false'
+      widgetButton.setAttribute('aria-pressed', String(enabled))
+      widgetButton.setAttribute('aria-label', enabled
+        ? 'Disable Auto-Close markers'
+        : 'Enable Auto-Close markers')
+      widgetButton.title = `Auto-close markers: ${enabled ? 'On' : 'Off'}`
+    }
+
+    if (action) {
+      if (widget) {
+        action.setLabel(`${widgetVisible ? 'Hide' : 'Show'} Auto-Close widget · ${enabled ? 'On' : 'Off'}`)
+      } else {
+        action.setLabel(`Auto-close markers: ${enabled ? 'On' : 'Off'}`)
+      }
+    }
+  }
+
+  const toggleEnabled = () => {
+    enabled = !enabled
+    updateUi()
+  }
+
+  try {
+    widget = ctx.ui.createFloatWidget({
+      width: 48,
+      height: 48,
+      initialPosition: {
+        x: Math.max(16, window.innerWidth - 72),
+        y: Math.max(16, window.innerHeight - 160),
+      },
+      snapToEdge: true,
+      tooltip: 'Toggle Auto-Close markers',
+      chromeless: true,
+    })
+
+    const style = document.createElement('style')
+    style.textContent = `
+      .lumi-auto-close-widget {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+        border-radius: 999px;
+        background: var(--lumiverse-primary, #7c3aed);
+        color: var(--lumiverse-primary-contrast, #fff);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+        cursor: pointer;
+        font: inherit;
+        touch-action: manipulation;
+        transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
+      }
+      .lumi-auto-close-widget:hover { transform: scale(1.05); }
+      .lumi-auto-close-widget:active { transform: scale(.96); }
+      .lumi-auto-close-widget:focus-visible {
+        outline: 2px solid var(--lumiverse-primary, #7c3aed);
+        outline-offset: 3px;
+      }
+      .lumi-auto-close-widget[data-enabled="false"] {
+        background: color-mix(in srgb, var(--lumiverse-primary, #7c3aed) 14%, rgba(28, 28, 32, .94));
+        color: rgba(245, 245, 247, .72);
+        opacity: .82;
+      }
+      .lumi-auto-close-widget__quote {
+        display: block;
+        transform: translateY(-1px);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .lumi-auto-close-widget__status {
+        position: absolute;
+        right: 5px;
+        bottom: 5px;
+        width: 9px;
+        height: 9px;
+        border: 2px solid rgba(20, 20, 24, .78);
+        border-radius: 999px;
+        background: #fff;
+      }
+      .lumi-auto-close-widget[data-enabled="false"] .lumi-auto-close-widget__status {
+        background: rgba(150, 150, 158, .9);
+      }
+    `
+
+    widgetButton = document.createElement('button')
+    widgetButton.type = 'button'
+    widgetButton.className = 'lumi-auto-close-widget'
+    widgetButton.innerHTML = '<span class="lumi-auto-close-widget__quote" aria-hidden="true">”</span><span class="lumi-auto-close-widget__status" aria-hidden="true"></span>'
+    widgetButton.addEventListener('click', toggleEnabled)
+
+    widget.root.replaceChildren(style, widgetButton)
+    widget.setVisible(false)
+  } catch {
+    widget?.destroy()
+    // If ui_panels is unavailable or revoked, the Extras action falls back to
+    // directly toggling Auto-Close so the extension remains usable.
+    widget = null
+    widgetButton = null
+  }
 
   try {
     action = ctx.ui.registerInputBarAction({
       id: 'toggle-auto-close',
-      label: 'Auto-close markers: On',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17h4V9H5v5h2v3Zm10 0h4V9h-6v5h2v3Z"/></svg>',
+      label: widget ? 'Show Auto-Close widget · On' : 'Auto-close markers: On',
+      iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.8 18H11V8H4v6h2.8v4Zm10 0H21V8h-7v6h2.8v4Z"/></svg>',
       enabled: true,
     })
 
     unsubscribeAction = action.onClick(() => {
-      enabled = !enabled
-      action?.setLabel(`Auto-close markers: ${enabled ? 'On' : 'Off'}`)
+      if (!widget) {
+        toggleEnabled()
+        return
+      }
+
+      widgetVisible = !widgetVisible
+      widget.setVisible(widgetVisible)
+      updateUi()
     })
   } catch {
-    // Auto-close still works if this Lumiverse build predates Input Bar Actions.
+    // Auto-Close still works if this Lumiverse build predates Input Bar Actions.
   }
+
+  updateUi()
 
   return () => {
     document.removeEventListener('beforeinput', beforeInput, true)
+    if (widgetButton) widgetButton.removeEventListener('click', toggleEnabled)
     unsubscribeAction?.()
     action?.destroy()
+    widget?.destroy()
   }
 }

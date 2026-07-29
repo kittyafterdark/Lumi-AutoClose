@@ -1,10 +1,10 @@
 # Lumi Auto-Close
 
-A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers across Lumiverse text fields.
+A tiny frontend Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers across Lumiverse text fields.
 
 ## Where it works
 
-Version 1.1 expands auto-close beyond the chat composer. It now applies to visible, editable:
+Auto-Close applies to visible, editable:
 
 - Chat composers
 - Character editor fields and modals
@@ -28,11 +28,33 @@ Password fields, disabled/read-only fields, hidden backing inputs, and elements 
 
 Typing an opening marker inserts both characters and leaves the caret between them. Typing the closer when it is already under the caret moves across it instead of duplicating it. Pressing Backspace between an empty pair removes both characters. Selecting text and typing an opening marker wraps the selection.
 
-The **Extras** popover in the chat input bar gets an `Auto-close markers: On/Off` session toggle. The toggle controls the extension globally, including editors and modals.
+## Global toggle widget
+
+Version 1.2 adds a small draggable curly-quote widget that can toggle Auto-Close from anywhere in Lumiverse.
+
+The widget is **hidden by default**. Open the chat input bar's **Extras** popover and choose **Show Auto-Close widget** to reveal it. Use the same command to hide it again.
+
+- Click the floating curly quote to turn Auto-Close on or off globally.
+- The bright/accent state means Auto-Close is on.
+- The muted state means Auto-Close is off.
+- The widget follows Lumiverse route changes and can be dragged to a convenient screen edge.
+
+The Extras command includes the current On/Off state. If Float Widgets are unavailable, the command gracefully falls back to toggling Auto-Close directly.
+
+## Permission
+
+The extension requests `ui_panels` only so it can use Lumiverse's official Float Widget API. It does not request character, lorebook, prompt, generation, network, or backend access.
 
 ## Install
 
-Copy the repository's url to the Lumiverse Extensions tab and select staging
+Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
+
+The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
+
+```bash
+bun install
+bun run build
+```
 
 ## Customize pairs
 

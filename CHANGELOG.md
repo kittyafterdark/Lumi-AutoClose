@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Added an optional draggable global Auto-Close toggle using Lumiverse's official Float Widget API.
+- Kept the floating widget hidden by default.
+- Changed the Extras popover action to show or hide the widget and report the current On/Off state.
+- Added a curly-quote button with accent-colored enabled and muted disabled states.
+- Added a direct-toggle fallback when Float Widgets are unavailable.
+- Added the required `ui_panels` permission; no content, generation, network, or backend permissions are requested.
+
 ## 1.1.0
 
 - Expanded auto-close from the chat composer to all visible editable textareas and supported text inputs.
