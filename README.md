@@ -18,14 +18,10 @@ The **Extras** popover in the input bar gets an `Auto-close markers: On/Off` ses
 
 ## Install
 
-Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
+Copy the repo link:
+```https://github.com/kittyafterdark/Lumi-AutoClose```
 
-The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
-
-```bash
-bun install
-bun run build
-```
+Into the install box on the extensions tab
 
 ## Customize pairs
 
