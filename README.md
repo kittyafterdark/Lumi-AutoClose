@@ -32,14 +32,7 @@ The **Extras** popover in the chat input bar gets an `Auto-close markers: On/Off
 
 ## Install
 
-Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
-
-The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
-
-```bash
-bun install
-bun run build
-```
+Copy the repository's url to the Lumiverse Extensions tab and select staging
 
 ## Customize pairs
 
