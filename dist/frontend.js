@@ -1,191 +1,407 @@
 const PAIRS = Object.freeze({
-  '"': '"',
-  '“': '”',
-  '*': '*',
-  '`': '`',
-  '(': ')',
-  '[': ']',
-  '{': '}',
-})
-
-const CLOSERS = new Set(Object.values(PAIRS))
-
-const COMPOSER_ROOT_SELECTOR = [
-  '[data-component="InputBar"]',
-  '[data-component="MessageInput"]',
-  '[data-component="ChatInput"]',
-  '[data-testid="message-input"]',
-  '[data-testid="chat-input"]',
-  '.inputbar-container',
-  '[class*="InputBar"]',
-  '[class*="inputbar"]',
-  '[class*="MessageInput"]',
-].join(',')
-
-function isTextArea(value) {
-  return value instanceof HTMLTextAreaElement
+    '"': '"',
+    '“': '”',
+    '*': '*',
+    '`': '`',
+    '(': ')',
+    '[': ']',
+    '{': '}',
+});
+const CLOSERS = new Set(Object.values(PAIRS));
+const TEXT_INPUT_TYPES = new Set(['', 'text', 'search', 'url', 'email', 'tel']);
+const OPT_OUT_SELECTOR = '[data-lumi-autoclose="off"]';
+function isNativeTextControl(value) {
+    if (value instanceof HTMLTextAreaElement)
+        return true;
+    return value instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(value.type.toLowerCase());
 }
-
+function isContentEditableRoot(value) {
+    return value instanceof HTMLElement && value.isContentEditable;
+}
+function contentEditableRoot(value) {
+    if (!(value instanceof Node))
+        return null;
+    const element = value instanceof HTMLElement ? value : value.parentElement;
+    if (!element)
+        return null;
+    const candidate = element.closest('[contenteditable="true"], [contenteditable="plaintext-only"]');
+    if (!candidate?.isContentEditable)
+        return null;
+    // Use the outermost active editing host so nested formatting nodes do not
+    // become separate fields.
+    let root = candidate;
+    while (root.parentElement?.isContentEditable)
+        root = root.parentElement;
+    return root;
+}
+function resolveEditableTarget(event) {
+    for (const item of event.composedPath()) {
+        if (isNativeTextControl(item))
+            return item;
+        const editable = contentEditableRoot(item);
+        if (editable)
+            return editable;
+    }
+    if (isNativeTextControl(event.target))
+        return event.target;
+    return contentEditableRoot(event.target);
+}
 function isVisible(element) {
-  const rect = element.getBoundingClientRect()
-  const style = window.getComputedStyle(element)
-  return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    if (element.closest('[hidden], [aria-hidden="true"], [inert]'))
+        return false;
+    const style = window.getComputedStyle(element);
+    return element.getClientRects().length > 0
+        && style.display !== 'none'
+        && style.visibility !== 'hidden';
 }
-
-function looksLikeChatComposer(element) {
-  if (element.disabled || element.readOnly || !isVisible(element)) return false
-  if (element.closest(COMPOSER_ROOT_SELECTOR)) return true
-
-  const hint = [
-    element.placeholder,
-    element.getAttribute('aria-label'),
-    element.getAttribute('name'),
-    element.id,
-  ].filter(Boolean).join(' ')
-
-  if (/message|chat|reply|send/i.test(hint)) return true
-
-  // Last-resort fallback for localized builds: a visible textarea near the bottom
-  // with a nearby submit/send button is almost certainly the chat composer.
-  const rect = element.getBoundingClientRect()
-  const nearBottom = rect.top >= window.innerHeight * 0.5
-  const searchRoot = element.closest('form') ?? element.parentElement?.parentElement
-  const hasNearbySend = Boolean(searchRoot?.querySelector(
-    'button[type="submit"], button[aria-label*="send" i], button[title*="send" i]'
-  ))
-
-  return nearBottom && hasNearbySend
+function canEdit(element) {
+    if (!isVisible(element) || element.closest(OPT_OUT_SELECTOR))
+        return false;
+    if (isNativeTextControl(element)) {
+        return !element.disabled && !element.readOnly;
+    }
+    return isContentEditableRoot(element)
+        && element.getAttribute('aria-readonly') !== 'true';
 }
-
 function setNativeValue(element, value) {
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
-  if (descriptor?.set) descriptor.set.call(element, value)
-  else element.value = value
+    const prototype = element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+    if (descriptor?.set)
+        descriptor.set.call(element, value);
+    else
+        element.value = value;
 }
-
 function emitInput(element, inputType, data) {
-  let event
-  try {
-    event = new InputEvent('input', {
-      bubbles: true,
-      composed: true,
-      inputType,
-      data,
-    })
-  } catch {
-    event = new Event('input', { bubbles: true, composed: true })
-  }
-  element.dispatchEvent(event)
+    let event;
+    try {
+        event = new InputEvent('input', {
+            bubbles: true,
+            composed: true,
+            inputType,
+            data,
+        });
+    }
+    catch {
+        event = new Event('input', { bubbles: true, composed: true });
+    }
+    element.dispatchEvent(event);
 }
-
-function restoreCaret(element, position, scrollTop) {
-  const apply = () => {
-    if (!element.isConnected) return
-    element.setSelectionRange(position, position)
-    element.scrollTop = scrollTop
-  }
-
-  apply()
-  queueMicrotask(apply)
-  requestAnimationFrame(apply)
+function restoreNativeCaret(element, position, scrollTop, scrollLeft) {
+    const apply = () => {
+        if (!element.isConnected)
+            return;
+        try {
+            element.setSelectionRange(position, position);
+        }
+        catch {
+            return;
+        }
+        element.scrollTop = scrollTop;
+        element.scrollLeft = scrollLeft;
+    };
+    apply();
+    queueMicrotask(apply);
+    requestAnimationFrame(apply);
 }
-
-function replaceRange(
-  element,
-  start,
-  end,
-  replacement,
-  caret,
-  inputType,
-  data,
-) {
-  const nextValue = element.value.slice(0, start) + replacement + element.value.slice(end)
-  const scrollTop = element.scrollTop
-  setNativeValue(element, nextValue)
-  emitInput(element, inputType, data)
-  restoreCaret(element, caret, scrollTop)
+function replaceNativeRange(element, start, end, replacement, caret, inputType, data) {
+    const nextValue = element.value.slice(0, start) + replacement + element.value.slice(end);
+    const scrollTop = element.scrollTop;
+    const scrollLeft = element.scrollLeft;
+    setNativeValue(element, nextValue);
+    emitInput(element, inputType, data);
+    restoreNativeCaret(element, caret, scrollTop, scrollLeft);
 }
-
-export function setup(ctx) {
-  let enabled = true
-
-  const beforeInput = (event) => {
-    if (!enabled || !(event instanceof InputEvent) || event.isComposing) return
-    if (!isTextArea(event.target) || !looksLikeChatComposer(event.target)) return
-
-    const element = event.target
-    const start = element.selectionStart
-    const end = element.selectionEnd
-    if (start == null || end == null) return
-
+function getNativeSelection(element) {
+    try {
+        const start = element.selectionStart;
+        const end = element.selectionEnd;
+        return start == null || end == null ? null : { start, end };
+    }
+    catch {
+        return null;
+    }
+}
+function textOffsetWithin(root, container, offset) {
+    if (!root.contains(container) && container !== root)
+        return null;
+    const range = document.createRange();
+    range.selectNodeContents(root);
+    try {
+        range.setEnd(container, offset);
+    }
+    catch {
+        return null;
+    }
+    return range.toString().length;
+}
+function pointAtTextOffset(root, targetOffset) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let remaining = Math.max(0, targetOffset);
+    let lastText = null;
+    while (walker.nextNode()) {
+        const text = walker.currentNode;
+        lastText = text;
+        if (remaining <= text.data.length)
+            return { node: text, offset: remaining };
+        remaining -= text.data.length;
+    }
+    if (lastText)
+        return { node: lastText, offset: lastText.data.length };
+    return { node: root, offset: root.childNodes.length };
+}
+function getContentEditableSelection(root) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount !== 1)
+        return null;
+    const range = selection.getRangeAt(0);
+    const start = textOffsetWithin(root, range.startContainer, range.startOffset);
+    const end = textOffsetWithin(root, range.endContainer, range.endOffset);
+    if (start == null || end == null)
+        return null;
+    return start <= end ? { start, end } : { start: end, end: start };
+}
+function restoreContentEditableCaret(root, position) {
+    const apply = () => {
+        if (!root.isConnected)
+            return;
+        const selection = window.getSelection();
+        if (!selection)
+            return;
+        const point = pointAtTextOffset(root, position);
+        const range = document.createRange();
+        range.setStart(point.node, point.offset);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+    apply();
+    queueMicrotask(apply);
+    requestAnimationFrame(apply);
+}
+function replaceContentEditableRange(root, start, end, replacement, caret, inputType, data) {
+    const startPoint = pointAtTextOffset(root, start);
+    const endPoint = pointAtTextOffset(root, end);
+    const range = document.createRange();
+    range.setStart(startPoint.node, startPoint.offset);
+    range.setEnd(endPoint.node, endPoint.offset);
+    range.deleteContents();
+    if (replacement) {
+        range.insertNode(document.createTextNode(replacement));
+    }
+    emitInput(root, inputType, data);
+    restoreContentEditableCaret(root, caret);
+}
+function handleNativeBeforeInput(event, element) {
+    const selection = getNativeSelection(element);
+    if (!selection)
+        return;
+    const { start, end } = selection;
     if (event.inputType === 'deleteContentBackward' && start === end && start > 0) {
-      const opener = element.value[start - 1]
-      const closer = element.value[start]
-      if (PAIRS[opener] === closer) {
-        event.preventDefault()
-        replaceRange(element, start - 1, start + 1, '', start - 1, 'deleteContentBackward', null)
-      }
-      return
+        const opener = element.value[start - 1];
+        const closer = element.value[start];
+        if (PAIRS[opener] === closer) {
+            event.preventDefault();
+            replaceNativeRange(element, start - 1, start + 1, '', start - 1, 'deleteContentBackward', null);
+        }
+        return;
     }
-
-    if (event.inputType !== 'insertText' || !event.data || event.data.length !== 1) return
-
-    const typed = event.data
-
-    // If the expected closer already exists at the caret, move across it.
+    if (event.inputType !== 'insertText' || !event.data || event.data.length !== 1)
+        return;
+    const typed = event.data;
     if (start === end && CLOSERS.has(typed) && element.value[start] === typed) {
-      event.preventDefault()
-      restoreCaret(element, start + 1, element.scrollTop)
-      return
+        event.preventDefault();
+        restoreNativeCaret(element, start + 1, element.scrollTop, element.scrollLeft);
+        return;
     }
-
-    const closer = PAIRS[typed]
-    if (!closer) return
-
-    event.preventDefault()
-
+    const closer = PAIRS[typed];
+    if (!closer)
+        return;
+    event.preventDefault();
     if (start !== end) {
-      const selected = element.value.slice(start, end)
-      const replacement = typed + selected + closer
-      replaceRange(
-        element,
-        start,
-        end,
-        replacement,
-        start + replacement.length,
-        'insertText',
-        replacement,
-      )
-      return
+        const selected = element.value.slice(start, end);
+        const replacement = typed + selected + closer;
+        replaceNativeRange(element, start, end, replacement, start + replacement.length, 'insertText', replacement);
+        return;
     }
-
-    replaceRange(element, start, end, typed + closer, start + typed.length, 'insertText', typed + closer)
-  }
-
-  document.addEventListener('beforeinput', beforeInput, true)
-
-  let action = null
-  let unsubscribeAction = null
-
-  try {
-    action = ctx.ui.registerInputBarAction({
-      id: 'toggle-auto-close',
-      label: 'Auto-close markers: On',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17h4V9H5v5h2v3Zm10 0h4V9h-6v5h2v3Z"/></svg>',
-      enabled: true,
-    })
-
-    unsubscribeAction = action.onClick(() => {
-      enabled = !enabled
-      action?.setLabel(`Auto-close markers: ${enabled ? 'On' : 'Off'}`)
-    })
-  } catch {
-    // The typing helper still works if this Lumiverse build predates Input Bar Actions.
-  }
-
-  return () => {
-    document.removeEventListener('beforeinput', beforeInput, true)
-    unsubscribeAction?.()
-    action?.destroy()
-  }
+    replaceNativeRange(element, start, end, typed + closer, start + 1, 'insertText', typed + closer);
+}
+function handleContentEditableBeforeInput(event, root) {
+    const selection = getContentEditableSelection(root);
+    if (!selection)
+        return;
+    const { start, end } = selection;
+    const text = root.textContent ?? '';
+    if (event.inputType === 'deleteContentBackward' && start === end && start > 0) {
+        const opener = text[start - 1];
+        const closer = text[start];
+        if (PAIRS[opener] === closer) {
+            event.preventDefault();
+            replaceContentEditableRange(root, start - 1, start + 1, '', start - 1, 'deleteContentBackward', null);
+        }
+        return;
+    }
+    if (event.inputType !== 'insertText' || !event.data || event.data.length !== 1)
+        return;
+    const typed = event.data;
+    if (start === end && CLOSERS.has(typed) && text[start] === typed) {
+        event.preventDefault();
+        restoreContentEditableCaret(root, start + 1);
+        return;
+    }
+    const closer = PAIRS[typed];
+    if (!closer)
+        return;
+    event.preventDefault();
+    if (start !== end) {
+        const selected = text.slice(start, end);
+        const replacement = typed + selected + closer;
+        replaceContentEditableRange(root, start, end, replacement, start + replacement.length, 'insertText', replacement);
+        return;
+    }
+    replaceContentEditableRange(root, start, end, typed + closer, start + 1, 'insertText', typed + closer);
+}
+export function setup(ctx) {
+    let enabled = true;
+    let widgetVisible = false;
+    const beforeInput = (rawEvent) => {
+        if (!enabled || !(rawEvent instanceof InputEvent) || rawEvent.isComposing)
+            return;
+        const target = resolveEditableTarget(rawEvent);
+        if (!target || !canEdit(target))
+            return;
+        if (isNativeTextControl(target))
+            handleNativeBeforeInput(rawEvent, target);
+        else
+            handleContentEditableBeforeInput(rawEvent, target);
+    };
+    document.addEventListener('beforeinput', beforeInput, true);
+    let autoCloseAction = null;
+    let widgetAction = null;
+    let widget = null;
+    let widgetButton = null;
+    let unsubscribeAutoCloseAction = null;
+    let unsubscribeWidgetAction = null;
+    const updateUi = () => {
+        if (widgetButton) {
+            widgetButton.dataset.enabled = enabled ? 'true' : 'false';
+            widgetButton.setAttribute('aria-pressed', String(enabled));
+            widgetButton.setAttribute('aria-label', enabled
+                ? 'Disable Auto-Close markers'
+                : 'Enable Auto-Close markers');
+            widgetButton.title = `Auto-Close: ${enabled ? 'On' : 'Off'}`;
+        }
+        autoCloseAction?.setLabel(`Auto-Close: ${enabled ? 'On' : 'Off'}`);
+        widgetAction?.setLabel(`Auto-Close widget: ${widgetVisible ? 'On' : 'Off'}`);
+    };
+    const toggleEnabled = () => {
+        enabled = !enabled;
+        updateUi();
+    };
+    const toggleWidget = () => {
+        if (!widget)
+            return;
+        widgetVisible = !widgetVisible;
+        widget.setVisible(widgetVisible);
+        updateUi();
+    };
+    try {
+        widget = ctx.ui.createFloatWidget({
+            width: 48,
+            height: 48,
+            initialPosition: {
+                x: Math.max(16, window.innerWidth - 72),
+                y: Math.max(16, window.innerHeight - 160),
+            },
+            snapToEdge: true,
+            tooltip: 'Toggle Auto-Close markers',
+            chromeless: true,
+        });
+        const style = document.createElement('style');
+        style.textContent = `
+      .lumi-auto-close-widget {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+        border-radius: 999px;
+        background: var(--lumiverse-primary, #7c3aed);
+        color: var(--lumiverse-primary-contrast, #fff);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+        cursor: pointer;
+        font: inherit;
+        touch-action: manipulation;
+        transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
+      }
+      .lumi-auto-close-widget:hover { transform: scale(1.05); }
+      .lumi-auto-close-widget:active { transform: scale(.96); }
+      .lumi-auto-close-widget:focus-visible {
+        outline: 2px solid var(--lumiverse-primary, #7c3aed);
+        outline-offset: 3px;
+      }
+      .lumi-auto-close-widget[data-enabled="false"] {
+        background: color-mix(in srgb, var(--lumiverse-primary, #7c3aed) 14%, rgba(28, 28, 32, .94));
+        color: rgba(245, 245, 247, .72);
+        opacity: .82;
+      }
+      .lumi-auto-close-widget__quote {
+        display: block;
+        width: 100%;
+        text-align: center;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1;
+        transform: translateY(4px);
+      }
+    `;
+        widgetButton = document.createElement('button');
+        widgetButton.type = 'button';
+        widgetButton.className = 'lumi-auto-close-widget';
+        widgetButton.innerHTML = '<span class="lumi-auto-close-widget__quote" aria-hidden="true">”</span>';
+        widgetButton.addEventListener('click', toggleEnabled);
+        widget.root.replaceChildren(style, widgetButton);
+        widget.setVisible(false);
+    }
+    catch {
+        widget?.destroy();
+        widget = null;
+        widgetButton = null;
+    }
+    try {
+        autoCloseAction = ctx.ui.registerInputBarAction({
+            id: 'toggle-auto-close',
+            label: 'Auto-Close: On',
+            iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.8 18H11V8H4v6h2.8v4Zm10 0H21V8h-7v6h2.8v4Z"/></svg>',
+            enabled: true,
+        });
+        unsubscribeAutoCloseAction = autoCloseAction.onClick(toggleEnabled);
+        if (widget) {
+            widgetAction = ctx.ui.registerInputBarAction({
+                id: 'toggle-auto-close-widget',
+                label: 'Auto-Close widget: Off',
+                iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 5h14v14H5V5Zm2 2v10h10V7H7Zm2.4 8h2.8V9H8v4h1.4v2Zm5 0h2.8V9H13v4h1.4v2Z"/></svg>',
+                enabled: true,
+            });
+            unsubscribeWidgetAction = widgetAction.onClick(toggleWidget);
+        }
+    }
+    catch {
+        // Auto-Close still works if this Lumiverse build predates Input Bar Actions.
+    }
+    updateUi();
+    return () => {
+        document.removeEventListener('beforeinput', beforeInput, true);
+        if (widgetButton)
+            widgetButton.removeEventListener('click', toggleEnabled);
+        unsubscribeAutoCloseAction?.();
+        unsubscribeWidgetAction?.();
+        autoCloseAction?.destroy();
+        widgetAction?.destroy();
+        widget?.destroy();
+    };
 }

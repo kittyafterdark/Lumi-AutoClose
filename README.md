@@ -1,6 +1,20 @@
 # Lumi Auto-Close
 
-A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers in the chat composer.
+A tiny frontend Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers across Lumiverse text fields.
+
+## Where it works
+
+Auto-Close applies to visible, editable:
+
+- Chat composers
+- Character editor fields and modals
+- Lorebook metadata and entry content
+- Prompt and preset editors
+- Expanded text editors
+- Standard single-line text fields
+- Compatible `contenteditable` editing surfaces
+
+Password fields, disabled/read-only fields, hidden backing inputs, and elements marked with `data-lumi-autoclose="off"` are ignored.
 
 ## Included pairs
 
@@ -14,19 +28,32 @@ A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogu
 
 Typing an opening marker inserts both characters and leaves the caret between them. Typing the closer when it is already under the caret moves across it instead of duplicating it. Pressing Backspace between an empty pair removes both characters. Selecting text and typing an opening marker wraps the selection.
 
-The **Extras** popover in the input bar gets an `Auto-close markers: On/Off` session toggle.
+## Global controls and widget
+
+Version 1.2 adds a small draggable curly-quote widget that can toggle Auto-Close from anywhere in Lumiverse. The widget is **hidden by default**.
+
+The chat input bar's **Extras** popover contains two independent commands:
+
+- **Auto-Close: On/Off** toggles the feature directly, whether or not the widget is visible.
+- **Auto-Close widget: On/Off** only shows or hides the floating widget.
+
+Clicking the floating curly quote toggles Auto-Close globally through the same state path as the first command, so its label updates immediately. The bright/accent button means Auto-Close is on; the muted button means it is off. The widget follows Lumiverse route changes and can be dragged to a convenient screen edge.
+
+## Permission
+
+The extension requests `ui_panels` only so it can use Lumiverse's official Float Widget API. It does not request character, lorebook, prompt, generation, network, or backend access.
 
 ## Install
 
-Copy the repo link:
+Install via the Lumiverse Extensions tab, pasting this repository's link in the installation field:
 ```https://github.com/kittyafterdark/Lumi-AutoClose```
-
-Into the install box on the extensions tab
 
 ## Customize pairs
 
 Edit the `PAIRS` object at the top of `src/frontend.ts`, then rebuild. Avoid adding straight apostrophes (`'`) unless you enjoy contractions fighting back.
 
-## Notes
+## Compatibility notes
 
-This uses a delegated `beforeinput` listener because the current public Spindle frontend API provides input-bar actions but not a first-class chat-composer text mutation hook. Composer detection is intentionally narrow and includes Lumiverse's `.inputbar-container` plus several stable-looking accessibility/data selectors and a localized-layout fallback.
+The extension uses one delegated `beforeinput` listener, so fields mounted later by React portals or lazy-loaded editor screens are handled automatically. Native value setters and bubbling input events keep controlled React fields synchronized.
+
+`contenteditable` support is intentionally conservative and plain-text oriented. Native Lumiverse textareas and text inputs are the primary supported path.
