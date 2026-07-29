@@ -1,0 +1,12 @@
+{
+  "name": "lumi-auto-close",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/frontend.ts --outfile dist/frontend.js --target browser"
+  },
+  "devDependencies": {
+    "lumiverse-spindle-types": "latest"
+  }
+}
