@@ -45,14 +45,8 @@ The extension requests `ui_panels` only so it can use Lumiverse's official Float
 
 ## Install
 
-Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
-
-The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
-
-```bash
-bun install
-bun run build
-```
+Install via the Lumiverse Extensions tab, pasting this repository's link in the installation field:
+```https://github.com/kittyafterdark/Lumi-AutoClose```
 
 ## Customize pairs
 
