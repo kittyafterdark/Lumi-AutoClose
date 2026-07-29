@@ -1,6 +1,20 @@
 # Lumi Auto-Close
 
-A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers in the chat composer.
+A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogue, Markdown, and bracket markers across Lumiverse text fields.
+
+## Where it works
+
+Version 1.1 expands auto-close beyond the chat composer. It now applies to visible, editable:
+
+- Chat composers
+- Character editor fields and modals
+- Lorebook metadata and entry content
+- Prompt and preset editors
+- Expanded text editors
+- Standard single-line text fields
+- Compatible `contenteditable` editing surfaces
+
+Password fields, disabled/read-only fields, hidden backing inputs, and elements marked with `data-lumi-autoclose="off"` are ignored.
 
 ## Included pairs
 
@@ -14,19 +28,25 @@ A tiny frontend-only Lumiverse/Spindle extension that auto-closes common dialogu
 
 Typing an opening marker inserts both characters and leaves the caret between them. Typing the closer when it is already under the caret moves across it instead of duplicating it. Pressing Backspace between an empty pair removes both characters. Selecting text and typing an opening marker wraps the selection.
 
-The **Extras** popover in the input bar gets an `Auto-close markers: On/Off` session toggle.
+The **Extras** popover in the chat input bar gets an `Auto-close markers: On/Off` session toggle. The toggle controls the extension globally, including editors and modals.
 
 ## Install
 
-Copy the repo link:
-```https://github.com/kittyafterdark/Lumi-AutoClose```
+Push this folder to a GitHub repository, then install that repository URL from Lumiverse's Spindle extension panel.
 
-Into the install box on the extensions tab
+The prebuilt `dist/frontend.js` is committed, so the repository is installable as-is. To rebuild after editing:
+
+```bash
+bun install
+bun run build
+```
 
 ## Customize pairs
 
 Edit the `PAIRS` object at the top of `src/frontend.ts`, then rebuild. Avoid adding straight apostrophes (`'`) unless you enjoy contractions fighting back.
 
-## Notes
+## Compatibility notes
 
-This uses a delegated `beforeinput` listener because the current public Spindle frontend API provides input-bar actions but not a first-class chat-composer text mutation hook. Composer detection is intentionally narrow and includes Lumiverse's `.inputbar-container` plus several stable-looking accessibility/data selectors and a localized-layout fallback.
+The extension uses one delegated `beforeinput` listener, so fields mounted later by React portals or lazy-loaded editor screens are handled automatically. Native value setters and bubbling input events keep controlled React fields synchronized.
+
+`contenteditable` support is intentionally conservative and plain-text oriented. Native Lumiverse textareas and text inputs are the primary supported path.

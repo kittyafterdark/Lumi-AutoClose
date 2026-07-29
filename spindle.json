@@ -1,11 +1,11 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "Lumi Auto-Close",
   "identifier": "lumi_auto_close",
   "author": "kittyafterdark",
   "github": "https://github.com/kittyafterdark/LumiAutoClose",
   "homepage": "https://github.com/kittyafterdark/LumiAutoClose",
-  "description": "Auto-closes dialogue, Markdown, and bracket markers while typing in the Lumiverse chat composer.",
+  "description": "Auto-closes dialogue, Markdown, and bracket markers across Lumiverse text fields and editors.",
   "permissions": [],
   "entry_frontend": "dist/frontend.js",
   "minimum_lumiverse_version": "0.1.0"
